@@ -73,7 +73,7 @@ export const createLabel = (text, color, flag) => {
         }
     }
 
-    if(flag) {
+    if(false) {
         for(var i=0; i < window.batchActionsDOM.length; i++) {
             var batchDataElement = document.getElementById("batchData");
             batchDataElement.appendChild(window.batchActionsDOM[i]);
