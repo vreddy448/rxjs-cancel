@@ -7,6 +7,7 @@ class Display extends React.Component {
     render() {
         
         let { reqPayload, response } = this.props;
+        reqPayload && console.log(reqPayload.id)
 
         return(
             <div className="m-3 card">
@@ -35,8 +36,5 @@ function mapDispatchToProps(dispatch) {
         
     }
 }
-
-// The connect function connects the Redux Dispatch and state to the AppContainer Container Component.
-// Without this the Component wont be functional.
 
 export default connect(mapStateToProps, mapDispatchToProps)(Display);

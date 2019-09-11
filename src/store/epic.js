@@ -1,16 +1,16 @@
 import { combineEpics, ofType } from 'redux-observable';
-import { of, Observable,empty } from "rxjs";
+import { of, Observable, empty, from } from "rxjs";
 import { ajax } from "rxjs/ajax";
 import { isEqual } from "lodash";
-import { map, mergeMap, catchError, takeUntil, filter  } from "rxjs/operators";
-import { sampleActionCreator } from "./action-creators";
+import { map, mergeMap, concatMap, catchError, takeUntil, filter } from "rxjs/operators";
+import { sampleActionCreator, errorCreator, dummyReduxActionCreator } from "./action-creators";
+import { fetch, getCancelTokenSource } from "../axios-service.js";
 
 const sampleEpic = action$ =>
   action$.pipe(
     ofType("ACTION"),
     map(action => action.payload),
-    debounceUntilChanged(2000),
-    mergeMap(reqPayload => 
+    dynamicMap(true)(reqPayload => 
         ajax.getJSON(
           `https://jsonplaceholder.typicode.com/todos/` + reqPayload.id
         ).pipe(
@@ -25,33 +25,49 @@ const sampleEpic = action$ =>
               }
             })
           )),
-          catchError(error => console.log(":: error ocurred at sampleEpic epic :: ", error))
+          logAndCatchError("abc")
         )
     ),
     catchError(error => console.log(":: error ocurred at sampleEpic epic :: ", error))
   );
 
-  const sampleEpic2 = action$ =>
+  const dummyActionEpic = action$ =>
   action$.pipe(
-    ofType("ACTION1"),
+    ofType("DUMMY_ACTION"),
     map(action => action.payload),
-    mergeMap(payload => 
+    dynamicMap(true)(reqPayload => 
         ajax.getJSON(
           `https://jsonplaceholder.typicode.com/todos/1`
         ).pipe(
           map(response => {
-            return {response, payload};
+            return dummyReduxActionCreator(response)
           })
         )
     ),
-    mergeMap((data) => {
-        return of(sampleActionCreator(data))
-      }
+    catchError(error => console.log(":: error ocurred at dummyActionEpic epic :: ", error))
+  );
+
+  const sampleEpic2 = action$ =>
+  action$.pipe(
+    ofType("ACTION1"),
+    debounceUntilChanged(2000),
+    map(action => {
+      return {...action.payload, signal: getCancelTokenSource()}
+    }),
+    mergeMap(reqPayload => 
+        from(fetch("https://jsonplaceholder.typicode.com/todos/" + reqPayload.id, 
+          { signal : reqPayload.signal.token,  method : "GET", }
+        )).pipe(
+          map(response => {
+            return sampleActionCreator({ response, reqPayload });
+          }),
+          cancelRequestUntil(action$, reqPayload, (x, y) => { console.log(x, y); if(x === 1) return true })
+        )
     ),
     catchError(error => console.log(":: error ocurred at createWork epic :: ", error))
   );
 
-  export const debounceUntilChanged = (delay) => {
+  export const debounceUntilChanged = (delay, comparator) => {
     return (source) => {
       return new Observable(observer => {
   
@@ -63,8 +79,14 @@ const sampleEpic = action$ =>
             mergeMap((value) => {
 
               const now = Date.now();
-              console.log(now, lastSeenTime, now - lastSeenTime);
-              if (isEqual(value, lastSeen) && (now - lastSeenTime) < delay ) {
+              var _comparator;
+              if(comparator) {
+                _comparator = comparator;
+              } else {
+                _comparator = isEqual;
+              }
+
+              if (_comparator(value, lastSeen) && (now - lastSeenTime) < delay ) {
                 return empty();
               } else {
                 lastSeen = value;
@@ -78,4 +100,31 @@ const sampleEpic = action$ =>
     };
   }
 
-export default combineEpics(sampleEpic2, sampleEpic);
+  export const logAndCatchError = (msg) => catchError(error => {
+    console.error(msg)
+    return of(errorCreator(msg, error));
+  })
+
+  
+  export const cancelRequestUntil = (action$, reqPayload, comparator) => 
+    takeUntil(
+      action$.pipe(
+        ofType("CANCEL_ACTION"),
+        filter(cancelRequest => {
+          if(comparator(cancelRequest, reqPayload)) {
+            reqPayload.signal.cancel("cancel");
+            return true
+          }
+        })
+      )
+    )
+   
+  const dynamicMap = (isParallel) => {
+    if(isParallel) {
+      return mergeMap;
+    } else {
+      return concatMap;
+    }
+  }
+
+export default combineEpics(sampleEpic2, sampleEpic, dummyActionEpic);

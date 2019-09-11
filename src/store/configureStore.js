@@ -1,4 +1,5 @@
 import { createStore, applyMiddleware, compose } from 'redux';
+import { batchDispatch } from './action-creators';
 import { createEpicMiddleware } from "redux-observable";
 import rootReducer from './reducer';
 import rootEpic from "./epic";
@@ -19,5 +20,6 @@ export const configureStore = () => {
 
   epicMiddleware.run(rootEpic);
   window.store = store;
+  window.batchDispatch = batchDispatch;
   return store;
 }

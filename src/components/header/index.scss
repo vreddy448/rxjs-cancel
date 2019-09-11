@@ -1,6 +1,9 @@
 .navbar-brand {
-    color: #572d89 !important;
+    color: #61dafb !important;
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 1.5em;
     font-weight: 500;
+}
+.navbar-brand > img {
+    margin-top: -5px;
 }
